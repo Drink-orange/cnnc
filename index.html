@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNNC - 语音聊天</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#1e1f24; --panel:#2b2d33; --panel2:#35383f; --line:#3f424a;
+    --text:#e8e9ec; --sub:#9a9da6; --brand:#5b8cff; --brand2:#7c5bff;
+    --green:#3ba55d; --red:#e0563c; --amber:#e5a13c; --screenbg:#141519; --rail:#131418;
+  }
+  body { font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
+
+  /* ---------- 登录页 ---------- */
+  #login { height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#232746,#1a1c26); overflow:auto; }
+  .login-card { background:var(--panel); padding:40px 44px; border-radius:22px; width:min(470px,94vw); box-shadow:0 20px 60px rgba(0,0,0,.45); }
+  .logo { font-size:34px; font-weight:800; letter-spacing:4px; background:linear-gradient(90deg,var(--brand),var(--brand2)); -webkit-background-clip:text; background-clip:text; color:transparent; text-align:center; }
+  .login-sub { color:var(--sub); font-size:13px; text-align:center; margin:8px 0 26px; }
+  .fld { margin-bottom:16px; }
+  .fld label { display:block; font-size:13px; color:var(--sub); margin-bottom:6px; }
+  .fld input[type=text] { width:100%; background:var(--panel2); border:2px solid transparent; border-radius:10px; padding:12px 14px; color:var(--text); font-size:15px; outline:none; }
+  .fld input[type=text]:focus { border-color:var(--brand); }
+  .fld input[type=text]::placeholder { color:#6b6e77; }
+  .avatar-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .avatar-opt { width:44px; height:44px; border-radius:50%; background:var(--panel2); display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; border:2px solid transparent; }
+  .avatar-opt.sel { border-color:var(--brand); }
+  .avatar-up { width:44px; height:44px; border-radius:50%; background:var(--panel2); border:2px dashed var(--line); color:var(--sub); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; }
+  .avatar-up input { display:none; }
+  .big-btn { width:100%; border:none; border-radius:12px; padding:14px; font-size:16px; font-weight:700; color:#fff; background:linear-gradient(90deg,var(--brand),var(--brand2)); cursor:pointer; margin-top:6px; }
+  .big-btn:hover { filter:brightness(1.1); }
+  .hint { color:var(--sub); font-size:12px; margin-top:14px; line-height:1.7; }
+
+  .dom-grid { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; margin-bottom:20px; min-height:40px; }
+  .login-dom { width:76px; cursor:pointer; text-align:center; }
+  .login-dom .di { width:64px; height:64px; margin:0 auto 6px; border-radius:18px; background:var(--panel2); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:19px; border:2px solid transparent; transition:all .15s; }
+  .login-dom:hover .di { border-color:var(--brand); border-radius:14px; }
+  .login-dom .dn { font-size:11px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .login-dom .dc { font-size:10px; color:var(--sub); letter-spacing:1px; }
+  .login-dom.new .di { border:2px dashed var(--line); color:var(--sub); font-size:26px; font-weight:400; }
+  .row2 { display:flex; gap:10px; }
+  .row2 .big-btn { flex:1; }
+  .ghost-btn { flex:1; border:none; border-radius:12px; padding:14px; font-size:15px; background:var(--panel2); color:var(--sub); cursor:pointer; font-weight:600; }
+  .ghost-btn:hover { color:var(--text); }
+  .create-link { width:100%; margin-top:12px; background:none; border:none; color:var(--brand); font-size:13px; cursor:pointer; text-decoration:underline dotted; }
+
+  /* ---------- 主界面 ---------- */
+  #app { display:none; height:100vh;
+    grid-template-columns:72px 240px 1fr 235px;
+    grid-template-rows:52px 1fr;
+    grid-template-areas:"top top top top" "rail side main mp"; }
+  #topbar { grid-area:top; background:#17181c; display:flex; align-items:center; padding:0 18px; gap:14px; border-bottom:1px solid var(--line); }
+  #topbar .logo-sm { font-weight:800; letter-spacing:2px; background:linear-gradient(90deg,var(--brand),var(--brand2)); -webkit-background-clip:text; background-clip:text; color:transparent; font-size:18px; }
+  #domainTag { background:var(--panel2); padding:4px 12px; border-radius:8px; font-size:13px; color:var(--sub); }
+  #inviteBtn { background:var(--panel2); border:1px solid var(--line); color:var(--brand); border-radius:8px; padding:5px 14px; cursor:pointer; font-size:13px; font-weight:700; letter-spacing:2px; }
+  #inviteBtn:hover { border-color:var(--brand); }
+  #connState { margin-left:auto; font-size:12px; color:var(--sub); }
+  #connState.ok { color:var(--green); }
+  #connState.err { color:var(--red); }
+  #connState.warn { color:var(--amber); }
+  #leaveBtn { background:none; border:1px solid var(--line); color:var(--sub); border-radius:8px; padding:5px 14px; cursor:pointer; font-size:13px; }
+  #leaveBtn:hover { color:var(--text); border-color:var(--sub); }
+
+  #domainRail { grid-area:rail; background:var(--rail); border-right:1px solid var(--line); padding:14px 0; display:flex; flex-direction:column; align-items:center; gap:10px; overflow-y:auto; }
+  .dom-item { width:46px; height:46px; flex:none; border-radius:16px; background:var(--panel2); color:var(--text); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; cursor:pointer; border:2px solid transparent; transition:all .15s; }
+  .dom-item:hover { border-radius:12px; background:#3f434c; }
+  .dom-item.on { border-color:#fff; border-radius:12px; }
+  #addDomainBtn { width:46px; height:46px; flex:none; border-radius:16px; border:2px dashed var(--line); background:none; color:var(--sub); font-size:20px; cursor:pointer; }
+  #addDomainBtn:hover { color:var(--text); border-color:var(--sub); border-radius:12px; }
+
+  #sidebar { grid-area:side; background:var(--panel); padding:14px 10px; overflow-y:auto; border-right:1px solid var(--line); }
+  .side-head { display:flex; align-items:center; justify-content:space-between; padding:0 6px 8px; color:var(--sub); font-size:12px; letter-spacing:1px; }
+  #addChBtn { background:none; border:none; color:var(--sub); font-size:18px; cursor:pointer; }
+  #addChBtn:hover { color:var(--text); }
+  .side-tip { color:#6b6e77; font-size:11px; padding:2px 6px 8px; line-height:1.6; }
+  .chan { border-radius:10px; cursor:pointer; padding:8px 10px; margin-bottom:4px; border:1px solid transparent; }
+  .chan:hover { background:var(--panel2); }
+  .chan.on { background:var(--panel2); border-color:var(--brand); }
+  .chan .l1 { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--sub); }
+  .chan.on .l1 { color:#fff; }
+  .chan .l1 .cnt { margin-left:auto; font-size:11px; background:#41444d; border-radius:99px; padding:1px 8px; }
+  .chan .ops { display:none; gap:2px; }
+  .chan:hover .ops { display:flex; }
+  .chan .ops button { border:none; background:none; color:var(--sub); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:5px; }
+  .chan .ops button:hover { color:#fff; background:#4a4e58; }
+  .chan .ops button.e.out { color:var(--red); font-weight:700; }
+  .chan .ops button.e.out:hover { background:var(--red); color:#fff; }
+  .chan .mems { display:flex; flex-wrap:wrap; gap:4px 8px; padding:6px 0 2px 22px; }
+  .chan .cm { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--sub); }
+  .chan .cm .cav { width:18px; height:18px; border-radius:50%; background:#41444d; display:flex; align-items:center; justify-content:center; font-size:11px; overflow:hidden; }
+  .chan .cm .cav img { width:100%; height:100%; object-fit:cover; }
+
+  #main { grid-area:main; display:flex; flex-direction:column; overflow:hidden; }
+  #chTitle { padding:14px 22px 10px; font-weight:700; display:flex; align-items:center; gap:10px; background:var(--screenbg); }
+  #chHint { color:var(--sub); font-size:12px; font-weight:400; }
+
+  #tiles { display:flex; flex-wrap:wrap; gap:14px; padding:0 22px 14px; background:var(--screenbg); overflow-y:auto; }
+  .tile { width:150px; border-radius:16px; background:var(--panel2); position:relative; display:flex; flex-direction:column; align-items:center; padding:18px 10px 14px; gap:6px; }
+  .tile .tava { width:74px; height:74px; border-radius:50%; background:#41444d; display:flex; align-items:center; justify-content:center; font-size:42px; overflow:hidden; }
+  .tile .tava img { width:100%; height:100%; object-fit:cover; }
+  .tile .nm { font-size:13px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tile .mic { font-size:11px; color:var(--sub); }
+  .tile .see-btn { position:absolute; right:8px; bottom:8px; width:32px; height:32px; border-radius:9px; border:none; background:#41444d; color:var(--sub); cursor:pointer; font-size:15px; }
+  .tile .see-btn:hover { color:#fff; background:#4a4e58; }
+  .tile .see-btn.sharing { background:var(--green); color:#fff; animation:pulse 1.6s infinite; }
+  .tile .see-btn.open { background:var(--brand); color:#fff; }
+  @keyframes pulse { 0%,100%{ box-shadow:0 0 0 0 rgba(59,165,93,.5);} 50%{ box-shadow:0 0 0 7px rgba(59,165,93,0);} }
+
+  #screens { flex:1; display:flex; flex-wrap:wrap; gap:12px; padding:14px 22px; overflow:auto; background:var(--screenbg); align-content:flex-start; min-height:180px; }
+  #minBar { width:100%; display:none; flex-wrap:wrap; gap:8px; }
+  .s-chip { background:var(--panel2); border:1px solid var(--line); color:var(--text); font-size:12px; padding:5px 12px; border-radius:99px; cursor:pointer; }
+  .s-chip:hover { border-color:var(--brand); }
+  .screen-box { background:#000; border-radius:12px; overflow:hidden; position:relative; flex:1 1 420px; min-height:220px; display:flex; flex-direction:column; }
+  .screen-box:fullscreen { border-radius:0; }
+  .s-head { display:flex; align-items:center; gap:10px; background:rgba(20,21,25,.92); padding:6px 10px; flex:none; }
+  .s-head .tag { font-size:12px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .s-head .vol { margin-left:auto; }
+  .s-head input[type=range] { width:90px; }
+  .s-head button { border:none; background:#41444d; color:#fff; width:26px; height:26px; border-radius:7px; cursor:pointer; font-size:13px; flex:none; }
+  .s-head button:hover { background:#4a4e58; }
+  .screen-box .vwrap { flex:1; min-height:0; }
+  .screen-box video { width:100%; height:100%; object-fit:contain; background:#000; display:block; }
+  #noScreen { margin:auto; color:#5a5d66; font-size:14px; }
+
+  #dock { border-top:1px solid var(--line); background:var(--panel); padding:12px 22px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .me-box { display:flex; align-items:center; gap:10px; }
+  #meAvatar { width:42px; height:42px; border-radius:50%; background:var(--panel2); display:flex; align-items:center; justify-content:center; font-size:22px; overflow:hidden; cursor:pointer; }
+  #meAvatar img { width:100%; height:100%; object-fit:cover; }
+  .me-info { font-size:14px; font-weight:600; display:flex; flex-direction:column; }
+  .me-info small { color:var(--sub); font-weight:400; font-size:11px; }
+  .dock-btn { border:none; border-radius:10px; padding:10px 16px; font-size:13px; font-weight:600; cursor:pointer; color:#fff; background:var(--panel2); }
+  .dock-btn.mic-off { background:var(--red); }
+  .dock-btn.share-on { background:var(--green); }
+  .vol { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--sub); }
+  input[type=range] { accent-color:var(--brand); width:110px; }
+
+  #mp { grid-area:mp; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:16px 14px; }
+  .mp-title { color:var(--sub); font-size:12px; letter-spacing:1px; margin:10px 0 8px; }
+  .mem { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:10px; font-size:13px; margin-bottom:2px; }
+  .mem:hover { background:var(--panel2); }
+  .mem .ava { width:34px; height:34px; flex:none; border-radius:50%; background:#41444d; display:flex; align-items:center; justify-content:center; font-size:19px; overflow:hidden; position:relative; }
+  .mem .ava img { width:100%; height:100%; object-fit:cover; }
+  .mem .dot { position:absolute; right:-1px; bottom:-1px; width:11px; height:11px; border-radius:50%; background:var(--green); border:2px solid var(--panel); }
+  .mem.off .ava { filter:grayscale(1) opacity(.55); }
+  .mem.off .dot { background:#5a5d66; }
+  .mem .mi { flex:1; overflow:hidden; }
+  .mem .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mem .st { color:var(--sub); font-size:11px; }
+  .mem.off .nm, .mem.off .st { color:var(--sub); }
+  .mem .vol input[type=range] { width:70px; }
+
+  .modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:50; }
+  .modal-mask.open { display:flex; }
+  .modal { background:var(--panel); border-radius:18px; padding:28px; width:min(400px,92vw); }
+  .modal h3 { margin-bottom:14px; }
+  .modal input[type=text] { width:100%; background:var(--panel2); border:2px solid transparent; border-radius:10px; padding:11px 13px; color:var(--text); font-size:14px; outline:none; margin-bottom:10px; }
+  .modal input[type=text]:focus { border-color:var(--brand); }
+  .modal input[type=text]::placeholder { color:#6b6e77; }
+  .modal .row { display:flex; gap:10px; margin-top:18px; }
+  .modal .row .big-btn { flex:1; margin-top:0; }
+  .code-big { font-size:38px; font-weight:800; letter-spacing:8px; text-align:center; color:var(--brand); background:var(--panel2); border-radius:12px; padding:14px 0; margin:12px 0; user-select:all; }
+  .code-tip { color:var(--sub); font-size:12px; line-height:1.7; text-align:center; }
+
+  @media (max-width: 950px) {
+    #app { grid-template-columns:60px 200px 1fr; grid-template-areas:"top top top" "rail side main"; }
+    #mp { display:none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 登录 第1步：昵称头像 ============ -->
+<div id="login">
+  <div class="login-card" id="step1">
+    <div class="logo">CNNC</div>
+    <div class="login-sub">域 · 频道 · 语音 · 屏幕共享</div>
+    <div class="fld">
+      <label>你的昵称</label>
+      <input type="text" id="nickInput" maxlength="12" placeholder="例如：小明">
+    </div>
+    <div class="fld">
+      <label>选择头像（或上传图片）</label>
+      <div class="avatar-row" id="avatarRow">
+        <div class="avatar-up" id="upAvatarBtn" title="上传图片">＋<input type="file" id="upAvatar" accept="image/*"></div>
+      </div>
+    </div>
+    <button class="big-btn" id="nextBtn">下一步：选择域</button>
+    <div class="hint">提示：需要允许浏览器使用麦克风；屏幕共享在 Chrome / Edge 下体验最佳。</div>
+  </div>
+
+  <!-- 第2步：选择域 -->
+  <div class="login-card" id="step2" style="display:none">
+    <div class="logo">CNNC</div>
+    <div class="login-sub">选择要进入的域（进入需要域名 + 邀请码）</div>
+    <div class="dom-grid" id="loginDomGrid"></div>
+    <div class="fld">
+      <label>用域名 + 邀请码加入</label>
+      <input type="text" id="joinDomName" maxlength="20" placeholder="域名" style="margin-bottom:10px">
+      <input type="text" id="joinDomCode" maxlength="6" placeholder="6位邀请码，如 ABC123" style="text-transform:uppercase;letter-spacing:3px">
+    </div>
+    <div class="row2">
+      <button class="big-btn" id="goDomBtn">进入</button>
+      <button class="ghost-btn" id="backStep1">返回</button>
+    </div>
+    <button class="create-link" id="createDomLink">或者 → 创建一个新域（自动生成固定邀请码）</button>
+  </div>
+</div>
+
+<!-- ============ 主界面 ============ -->
+<div id="app">
+  <div id="topbar">
+    <span class="logo-sm">CNNC</span>
+    <span id="domainTag"></span>
+    <button id="inviteBtn" title="查看本域邀请码">邀请码</button>
+    <span id="connState"></span>
+    <button id="leaveBtn">离开</button>
+  </div>
+
+  <div id="domainRail">
+    <div id="domainList" style="display:flex;flex-direction:column;align-items:center;gap:10px;"></div>
+    <button id="addDomainBtn" title="加入 / 创建新域">＋</button>
+  </div>
+
+  <div id="sidebar">
+    <div class="side-head"><span id="sideDomain">频道</span><button id="addChBtn" title="创建频道">＋</button></div>
+    <div class="side-tip">双击频道进入语音 · 悬停频道可改名 / 删除（仅限空频道）</div>
+    <div id="chanList"></div>
+  </div>
+
+  <div id="main">
+    <div id="chTitle"><span id="chName">未加入频道</span><span id="chHint"></span></div>
+    <div id="tiles"></div>
+    <div id="screens">
+      <div id="minBar"></div>
+      <div id="noScreen">暂无屏幕共享 · 进入频道后可点成员头像右下角的 🖥 查看他的屏幕</div>
+    </div>
+    <div id="dock">
+      <div class="me-box">
+        <div id="meAvatar" title="点击更换头像">🙂</div>
+        <div class="me-info"><span id="meNick"></span><small id="meState">未加入频道</small></div>
+      </div>
+      <button class="dock-btn" id="micBtn">🎤 静音</button>
+      <button class="dock-btn" id="shareBtn">🖥 共享屏幕</button>
+      <button class="dock-btn" id="exitChBtn" style="display:none;background:var(--red)">🚪 离开频道</button>
+      <div class="vol">🎤麦克风音量 <input type="range" id="micVol" min="0" max="200" value="100"><span id="micVolVal">100%</span></div>
+      <label class="vol" style="cursor:pointer;user-select:none"><input type="checkbox" id="denoiseChk" style="width:15px;height:15px;accent-color:var(--green)">降噪</label>
+    </div>
+  </div>
+
+  <div id="mp">
+    <div class="mp-title">在线成员</div>
+    <div id="onlineList"></div>
+    <div class="mp-title">离线</div>
+    <div id="offlineList"></div>
+  </div>
+</div>
+
+<!-- 建频道弹窗 -->
+<div class="modal-mask" id="chModal">
+  <div class="modal">
+    <h3>创建频道</h3>
+    <input type="text" id="newChName" maxlength="16" placeholder="频道名称，例如：开黑房">
+    <div class="row">
+      <button class="big-btn" id="createChBtn">创建</button>
+      <button class="ghost-btn" id="cancelChBtn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 改名弹窗 -->
+<div class="modal-mask" id="renModal">
+  <div class="modal">
+    <h3>频道改名</h3>
+    <input type="text" id="renChName" maxlength="16">
+    <div class="row">
+      <button class="big-btn" id="doRenBtn">确定</button>
+      <button class="ghost-btn" id="cancelRenBtn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 加入域弹窗 -->
+<div class="modal-mask" id="domModal">
+  <div class="modal">
+    <h3>加入域</h3>
+    <input type="text" id="mDomName" maxlength="20" placeholder="域名">
+    <input type="text" id="mDomCode" maxlength="6" placeholder="6位邀请码，如 ABC123" style="text-transform:uppercase;letter-spacing:3px">
+    <div class="row">
+      <button class="big-btn" id="mJoinBtn">进入</button>
+      <button class="ghost-btn" id="mCreateBtn">创建新域</button>
+      <button class="ghost-btn" id="cancelDomBtn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 创建域结果弹窗 -->
+<div class="modal-mask" id="invModal">
+  <div class="modal">
+    <h3>域创建成功 🎉</h3>
+    <div class="code-tip">邀请码已永久固定，请妥善保存<br>朋友输入「域名 + 邀请码」才能进入，只有域名进不来</div>
+    <div class="code-big" id="invCodeText"></div>
+    <div class="code-tip" id="invDomName" style="margin-bottom:6px"></div>
+    <div class="row">
+      <button class="big-btn" id="copyCodeBtn">📋 复制邀请码</button>
+      <button class="ghost-btn" id="enterDomBtn">进入域</button>
+    </div>
+  </div>
+</div>
+
+<!-- 查看邀请码弹窗 -->
+<div class="modal-mask" id="showInvModal">
+  <div class="modal">
+    <h3>本域邀请码</h3>
+    <div class="code-tip">朋友输入「域名 + 这个邀请码」即可进入本域</div>
+    <div class="code-big" id="showInvCode"></div>
+    <div class="row">
+      <button class="big-btn" id="copyCodeBtn2">📋 复制邀请码</button>
+      <button class="ghost-btn" id="closeShowInv">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 换头像弹窗 -->
+<div class="modal-mask" id="avModal">
+  <div class="modal">
+    <h3>更换头像</h3>
+    <div class="avatar-row" id="avatarRow2"></div>
+    <div class="row">
+      <button class="ghost-btn" id="upAvatarBtn2">上传图片</button>
+      <button class="ghost-btn" id="cancelAvBtn">关闭</button>
+    </div>
+    <input type="file" id="upAvatar2" accept="image/*" style="display:none">
+  </div>
+</div>
+
+<script type="module">
+import { joinRoom, selfId } from "https://cdn.jsdelivr.net/npm/trystero@0.21.4/mqtt/+esm";
+
+/* ================= 常量与状态 ================= */
+const EMOJI_AVATARS = ["🙂","😎","🐱","🐶","🦊","🐼","🤖","👾","👻","🦁","🐧","🐷"];
+const LS = { nick:"cnnc.nick", avatar:"cnnc.avatar", domain:"cnnc.domain", domains:"cnnc.domains" };
+
+let my = { nick:"", avatar:EMOJI_AVATARS[0], domain:"", domainKey:"", domCode:"", muted:false };
+let audioCtx = null, micGain = null, micStream = null, outStream = null, micTrackRef = null;
+let micOn = true, sharing = false, screenStream = null, localScreenEl = null;
+let denoiseOn = false, dnNodes = null, micSourceNode = null;   // 智能降噪：链路节点
+
+let dirRoom = null;          // 域感知房间：全域在线名单 + 频道登记
+let voiceRoom = null;        // 当前频道的语音房间
+let myChannel = null;
+let peers = new Map();       // pid -> {nick, avatar, channel, muted}（全域在线的人）
+let conns = new Map();       // pid -> 语音连接 {inGain, volPref, sharing, screenEl}
+let channels = new Set();
+let delChans = new Set();    // 已删除频道登记（防止别人缓存里"复活"它）
+let domainConfig = null;     // trystero 房间配置（密码 = 邀请码）
+let domainKey = null;
+let emptyCheckTimer = null;
+let pendingRename = null;
+
+const $ = id => document.getElementById(id);
+
+function hash36(str){
+  let h1 = 5381, h2 = 52711;
+  for (let i = 0; i < str.length; i++){
+    const c = str.charCodeAt(i);
+    h1 = (h1 * 33 ^ c) >>> 0;
+    h2 = (h2 * 31 ^ c) >>> 0;
+  }
+  return (h1.toString(36) + h2.toString(36));
+}
+
+function genInviteCode(){
+  const L = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  let s = "";
+  for (let i = 0; i < 3; i++) s += L[Math.floor(Math.random() * L.length)];
+  for (let i = 0; i < 3; i++) s += Math.floor(Math.random() * 10);
+  return s;
+}
+function normCode(c){ return (c || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+
+/* ---------- 本机数据 ---------- */
+function loadDomains(){
+  try {
+    const a = JSON.parse(localStorage.getItem(LS.domains) || "[]");
+    if (Array.isArray(a)) return a.filter(d => d && d.name && d.code);
+  } catch(e){}
+  return [];
+}
+function saveDomains(list){ localStorage.setItem(LS.domains, JSON.stringify(list)); }
+function findDomain(name){ return loadDomains().find(d => d.name === name) || null; }
+function loadJSON(key, fallback){
+  try { const v = JSON.parse(localStorage.getItem(key) || "null"); if (v != null) return v; } catch(e){}
+  return fallback;
+}
+function loadChans(){ return loadJSON("cnnc.chans." + domainKey, []); }
+function saveChans(){ localStorage.setItem("cnnc.chans." + domainKey, JSON.stringify([...channels])); }
+function loadDelChans(){ return loadJSON("cnnc.delchans." + domainKey, []); }
+function saveDelChans(){ localStorage.setItem("cnnc.delchans." + domainKey, JSON.stringify([...delChans])); }
+function loadMemRegistry(){ return loadJSON("cnnc.mems." + domainKey, {}); }
+function rememberMember(nick, avatar){
+  if (!nick || nick === my.nick) return;
+  const key = "cnnc.mems." + domainKey;
+  const mems = loadMemRegistry();
+  if (!mems[nick] || mems[nick].avatar !== avatar){
+    mems[nick] = { avatar: avatar || "🙂" };
+    localStorage.setItem(key, JSON.stringify(mems));
+    renderMembers();
+  }
+}
+
+/* ================= 登录流程 ================= */
+function buildAvatarRow(container, onPick){
+  container.querySelectorAll(".avatar-opt").forEach(e => e.remove());
+  EMOJI_AVATARS.forEach(e => {
+    const d = document.createElement("div");
+    d.className = "avatar-opt" + (my.avatar === e ? " sel" : "");
+    d.textContent = e;
+    d.onclick = () => onPick(e);
+    container.appendChild(d);
+  });
+}
+
+$("nickInput").value = localStorage.getItem(LS.nick) || "";
+if (localStorage.getItem(LS.avatar)) my.avatar = localStorage.getItem(LS.avatar);
+{
+  const row = $("avatarRow");
+  const pick = e => { my.avatar = e; buildAvatarRow(row, pick); };
+  buildAvatarRow(row, pick);
+  row.appendChild($("upAvatarBtn"));
+  $("upAvatarBtn").onclick = () => $("upAvatar").click();
+  $("upAvatar").onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => compressImg(r.result, d => { my.avatar = d; });
+    r.readAsDataURL(f);
+  };
+}
+
+function compressImg(dataUrl, cb){
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas"); c.width = c.height = 96;
+    const s = Math.min(img.width, img.height);
+    c.getContext("2d").drawImage(img, (img.width-s)/2, (img.height-s)/2, s, s, 0, 0, 96, 96);
+    cb(c.toDataURL("image/jpeg", 0.85));
+  };
+  img.src = dataUrl;
+}
+
+$("nextBtn").onclick = () => {
+  const nick = $("nickInput").value.trim();
+  if (!nick) return alert("请先填昵称");
+  my.nick = nick;
+  localStorage.setItem(LS.nick, nick);
+  localStorage.setItem(LS.avatar, my.avatar);
+  renderLoginDomains();
+  $("step1").style.display = "none";
+  $("step2").style.display = "";
+};
+$("backStep1").onclick = () => { $("step2").style.display = "none"; $("step1").style.display = ""; };
+
+function renderLoginDomains(){
+  const grid = $("loginDomGrid");
+  grid.innerHTML = "";
+  const domains = loadDomains();
+  domains.forEach(d => {
+    const el = document.createElement("div");
+    el.className = "login-dom";
+    el.innerHTML = '<div class="di"></div><div class="dn"></div><div class="dc"></div>';
+    el.querySelector(".di").textContent = d.name.slice(0, 2);
+    el.querySelector(".dn").textContent = d.name;
+    el.querySelector(".dc").textContent = d.code;
+    el.onclick = () => enterApp(d.name, d.code);
+    grid.appendChild(el);
+  });
+  if (!domains.length){
+    const tip = document.createElement("div");
+    tip.className = "code-tip";
+    tip.textContent = "还没有加入过域：用下面输入框加入朋友的域，或创建新域";
+    grid.appendChild(tip);
+  }
+}
+
+$("goDomBtn").onclick = () => {
+  const name = $("joinDomName").value.trim();
+  const code = normCode($("joinDomCode").value);
+  if (!name) return alert("请输入域名");
+  if (code.length !== 6) return alert("请输入 6 位邀请码（前3位字母+后3位数字）");
+  enterApp(name, code);
+};
+$("joinDomCode").addEventListener("keydown", e => { if (e.key === "Enter") $("goDomBtn").click(); });
+
+$("createDomLink").onclick = () => {
+  const name = $("joinDomName").value.trim() || prompt("给新域起个名字：");
+  if (!name) return;
+  createDomain(name);
+};
+
+function createDomain(name){
+  // 域名全局唯一：本机已存在同名域则拒绝创建
+  if (findDomain(name)){
+    return alert("域名「" + name + "」已存在，无法创建同名域。\n如果你是它的成员，请用域名 + 邀请码加入。");
+  }
+  const code = genInviteCode(); // 创建时生成，之后永久固定
+  const domains = loadDomains();
+  domains.unshift({ name, code });
+  saveDomains(domains);
+  $("invCodeText").textContent = code;
+  $("invDomName").textContent = "域名：" + name;
+  $("invModal").classList.add("open");
+  $("invModal").dataset.name = name;
+  $("invModal").dataset.code = code;
+}
+$("copyCodeBtn").onclick = () => {
+  navigator.clipboard.writeText($("invModal").dataset.code || "").then(() => {
+    $("copyCodeBtn").textContent = "✅ 已复制";
+    setTimeout(() => $("copyCodeBtn").textContent = "📋 复制邀请码", 1500);
+  });
+};
+$("enterDomBtn").onclick = () => {
+  $("invModal").classList.remove("open");
+  enterApp($("invModal").dataset.name, $("invModal").dataset.code);
+};
+
+/* ================= 进入应用 / 切换域 ================= */
+async function enterApp(name, code){
+  // 邀请码校验：本机已记录的域，邀请码不对 → 直接拒绝，绝不进入、绝不覆盖
+  const rec = findDomain(name);
+  if (rec && rec.code !== code){
+    return alert("邀请码错误，无法进入域「" + name + "」。\n请向域的创建者索取正确的 6 位邀请码。");
+  }
+
+  // 初始化麦克风（整个会话只初始化一次）
+  if (!audioCtx){
+    audioCtx = new AudioContext();
+    await audioCtx.resume();
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } });
+    } catch (e) {
+      return alert("无法获取麦克风：" + e.message + "\n请检查浏览器麦克风权限。");
+    }
+    micTrackRef = micStream.getAudioTracks()[0];
+    micGain = audioCtx.createGain();
+    micGain.gain.value = 1;
+    const dst = audioCtx.createMediaStreamDestination();
+    micSourceNode = audioCtx.createMediaStreamSource(micStream);
+    micSourceNode.connect(micGain);   // 直通：mic → micGain → dst
+    micGain.connect(dst);
+    outStream = dst.stream;
+  }
+
+  if (dirRoom) leaveDomain(); // 切换域：先退出旧域
+
+  // 首次见到该域（朋友邀请来的）：登记，并标记"待验证"
+  let firstTime = false;
+  if (!rec){
+    firstTime = true;
+    const domains = loadDomains();
+    domains.unshift({ name, code });
+    saveDomains(domains);
+  }
+  localStorage.setItem(LS.domain, name);
+
+  my.domain = name;
+  my.domCode = code;
+  my.domainKey = "d" + hash36(name + "||" + code);
+  myChannel = null;
+  domainConfig = { appId: "cnnc-v1", password: "cnnc-" + code };
+
+  channels = new Set(loadChans());
+  if (!channels.size) channels.add("大厅");
+  delChans = new Set(loadDelChans());
+
+  $("login").style.display = "none";
+  $("app").style.display = "grid";
+  $("meNick").textContent = my.nick;
+  $("domainTag").textContent = "域：" + name;
+  $("sideDomain").textContent = name + " 的频道";
+  $("chName").textContent = "未加入频道";
+  $("chHint").textContent = " ← 在左侧双击一个频道加入语音";
+  $("meState").textContent = "未加入频道";
+  renderMyAvatar();
+  renderDomainRail();
+  renderChannels();
+  renderTiles();
+  renderMembers();
+  setState("在线（未加入频道）", "ok");
+
+  joinDomainRoom(firstTime);
+}
+
+function joinDomainRoom(firstTime){
+  dirRoom = joinRoom(domainConfig, my.domainKey);
+  window._dirRoom = dirRoom;
+
+  const [sendReg, getReg] = dirRoom.makeAction("reg");
+  const [sendChans, getChans] = dirRoom.makeAction("chans");
+  const [sendChop, getChop] = dirRoom.makeAction("chop");
+  window._sendReg = sendReg;
+  window._sendChans = sendChans;
+  window._sendChop = sendChop;
+
+  getReg((d, pid) => {
+    peers.set(pid, { nick:d.nick, avatar:d.avatar, channel:d.channel || null, muted:!!d.muted });
+    rememberMember(d.nick, d.avatar);
+    renderChannels(); renderTiles(); renderMembers();
+  });
+  getChans(list => {
+    let added = false;
+    (list || []).forEach(c => { if (!delChans.has(c) && !channels.has(c)) { channels.add(c); added = true; } });
+    if (added){ saveChans(); renderChannels(); }
+  });
+  getChop(op => {
+    if (!op || !op.name) return;
+    if (op.op === "new"){ if (!delChans.has(op.name)) channels.add(op.name); }
+    if (op.op === "del"){ channels.delete(op.name); delChans.add(op.name); saveDelChans(); }
+    if (op.op === "ren"){
+      channels.delete(op.name); delChans.add(op.name); saveDelChans();
+      if (!delChans.has(op.newName)) channels.add(op.newName);
+    }
+    saveChans(); renderChannels();
+  });
+
+  dirRoom.onPeerJoin(pid => {
+    sendReg(myReg());
+    sendChans([...channels]);
+    renderMembers();
+  });
+  dirRoom.onPeerLeave(pid => {
+    peers.delete(pid);
+    renderChannels(); renderTiles(); renderMembers();
+  });
+
+  sendReg(myReg()); // 房间里可能已有人
+
+  // 防呆：12 秒后一个域友都没见到 → 提示邀请码可能有误
+  clearTimeout(emptyCheckTimer);
+  if (firstTime){
+    emptyCheckTimer = setTimeout(() => {
+      if (peers.size === 0 && !myChannel){
+        setState("未发现其他成员：邀请码可能输错，或该域当前无人在线", "warn");
+      }
+    }, 12000);
+  }
+}
+
+function myReg(){ return { nick:my.nick, avatar:my.avatar, channel:myChannel, muted:!micOn }; }
+
+function leaveDomain(){
+  clearTimeout(emptyCheckTimer);
+  if (sharing) stopShare();
+  leaveVoice();
+  if (dirRoom){ try{ dirRoom.leave(); }catch(e){} dirRoom = null; }
+  peers.clear();
+}
+
+function switchDomain(name){
+  const d = findDomain(name);
+  if (!d) return;
+  enterApp(d.name, d.code);
+}
+
+function renderDomainRail(){
+  const box = $("domainList");
+  box.innerHTML = "";
+  loadDomains().forEach(d => {
+    const el = document.createElement("div");
+    el.className = "dom-item" + (d.name === my.domain ? " on" : "");
+    el.title = d.name;
+    el.textContent = d.name.slice(0, 2);
+    el.onclick = () => { if (d.name !== my.domain) switchDomain(d.name); };
+    box.appendChild(el);
+  });
+}
+
+$("addDomainBtn").onclick = () => { $("domModal").classList.add("open"); $("mDomName").focus(); };
+$("cancelDomBtn").onclick = () => $("domModal").classList.remove("open");
+$("mJoinBtn").onclick = () => {
+  const name = $("mDomName").value.trim();
+  const code = normCode($("mDomCode").value);
+  if (!name) return alert("请输入域名");
+  if (code.length !== 6) return alert("请输入 6 位邀请码");
+  $("domModal").classList.remove("open");
+  enterApp(name, code);
+};
+$("mCreateBtn").onclick = () => {
+  const name = $("mDomName").value.trim();
+  if (!name) return alert("创建新域也要先填域名");
+  $("domModal").classList.remove("open");
+  createDomain(name);
+};
+
+$("inviteBtn").onclick = () => {
+  $("showInvCode").textContent = my.domCode || "—";
+  $("showInvModal").classList.add("open");
+};
+$("closeShowInv").onclick = () => $("showInvModal").classList.remove("open");
+$("copyCodeBtn2").onclick = () => {
+  navigator.clipboard.writeText(my.domCode || "").then(() => {
+    $("copyCodeBtn2").textContent = "✅ 已复制";
+    setTimeout(() => $("copyCodeBtn2").textContent = "📋 复制邀请码", 1500);
+  });
+};
+
+/* ================= 频道：双击进入 / 改名 / 删除 ================= */
+function countInChannel(name){
+  let n = 0;
+  peers.forEach(p => { if (p.channel === name) n++; });
+  if (myChannel === name) n++;
+  return n;
+}
+
+$("addChBtn").onclick = () => { $("chModal").classList.add("open"); $("newChName").focus(); };
+$("cancelChBtn").onclick = () => $("chModal").classList.remove("open");
+$("createChBtn").onclick = () => {
+  const n = $("newChName").value.trim();
+  if (!n) return;
+  if (channels.has(n) || n === "大厅") return alert("已有同名频道");
+  channels.add(n);
+  saveChans();
+  renderChannels();
+  window._sendChop && window._sendChop({ op:"new", name:n });
+  $("chModal").classList.remove("open");
+  $("newChName").value = "";
+  switchChannel(n); // 自己建的自己先进去
+};
+
+let renTarget = null;
+$("cancelRenBtn").onclick = () => $("renModal").classList.remove("open");
+$("doRenBtn").onclick = () => {
+  const newName = $("renChName").value.trim();
+  if (!newName || !renTarget) return;
+  if (newName === renTarget) return $("renModal").classList.remove("open");
+  if (channels.has(newName)) return alert("已有同名频道");
+  channels.delete(renTarget);
+  delChans.add(renTarget); saveDelChans();
+  if (!delChans.has(newName)) channels.add(newName);
+  saveChans();
+  renderChannels();
+  window._sendChop && window._sendChop({ op:"ren", name:renTarget, newName });
+  $("renModal").classList.remove("open");
+  renTarget = null;
+};
+
+function deleteChannel(name){
+  if (name === "大厅") return alert("默认频道「大厅」不能删除");
+  const n = countInChannel(name);
+  if (n > 0) return alert("频道「" + name + "」还有 " + n + " 个人，无法删除");
+  if (!confirm("确定删除频道「" + name + "」吗？")) return;
+  channels.delete(name);
+  delChans.add(name);
+  saveChans(); saveDelChans();
+  renderChannels();
+  window._sendChop && window._sendChop({ op:"del", name });
+}
+
+function renameChannel(name){
+  if (name === "大厅") return alert("默认频道「大厅」不能改名");
+  const n = countInChannel(name);
+  if (n > 0) return alert("频道「" + name + "」还有 " + n + " 个人，请等大家退出后再改名");
+  renTarget = name;
+  $("renChName").value = name;
+  $("renModal").classList.add("open");
+  $("renChName").focus();
+}
+
+/* 双击频道 → 加入语音；已在内 → 退出 */
+function switchChannel(name){
+  if (myChannel === name){ exitChannel(); return; }
+  leaveVoice();
+  myChannel = name;
+  $("chName").textContent = "#" + name;
+  $("chHint").textContent = "";
+  $("meState").textContent = "频道内";
+  $("exitChBtn").style.display = "";
+  setState("频道内 · " + (1 + conns.size) + " 人", "ok");
+  window._sendReg && window._sendReg(myReg());
+  renderChannels();
+  renderTiles();
+  joinVoice(name);
+}
+
+/* 退出频道：断开语音，回到"域内未进频道"状态 */
+function exitChannel(){
+  if (!myChannel) return;
+  leaveVoice();
+  myChannel = null;
+  $("chName").textContent = "未加入频道";
+  $("chHint").textContent = " ← 双击左侧频道加入语音";
+  $("meState").textContent = "在线（未加入频道）";
+  $("exitChBtn").style.display = "none";
+  setState("在线（未加入频道）", "ok");
+  window._sendReg && window._sendReg(myReg());
+  renderChannels();
+  renderTiles();
+}
+$("exitChBtn").onclick = exitChannel;
+
+function renderChannels(){
+  const box = $("chanList");
+  box.innerHTML = "";
+  const sorted = [...channels].sort((a, b) => (a === "大厅" ? -1 : b === "大厅" ? 1 : a.localeCompare(b, "zh")));
+  sorted.forEach(name => {
+    const d = document.createElement("div");
+    d.className = "chan" + (name === myChannel ? " on" : "");
+    const count = countInChannel(name);
+    const inThis = myChannel === name;
+    d.innerHTML = '<div class="l1"><span>🔊</span><span class="cn"></span>' +
+      '<span class="cnt">' + (count ? count + " 人" : "") + '</span>' +
+      '<span class="ops"><button class="e' + (inThis ? " out" : "") + '">' + (inThis ? "🚪 退出" : "🚪 进入") + '</button><button class="r" title="改名">✏️</button><button class="x" title="删除">🗑</button></span></div>' +
+      '<div class="mems"></div>';
+    d.querySelector(".cn").textContent = name;
+    const mems = d.querySelector(".mems");
+    if (myChannel === name){
+      mems.appendChild(cmEl(my.avatar, my.nick + "（我）"));
+    }
+    peers.forEach((p, pid) => {
+      if (p.channel === name) mems.appendChild(cmEl(p.avatar, p.nick));
+    });
+    d.querySelector(".e").onclick = e => { e.stopPropagation(); switchChannel(name); };
+    d.querySelector(".r").onclick = e => { e.stopPropagation(); renameChannel(name); };
+    d.querySelector(".x").onclick = e => { e.stopPropagation(); deleteChannel(name); };
+    d.ondblclick = () => switchChannel(name);
+    d.onclick = () => {}; // 单击只高亮，双击才进入
+    box.appendChild(d);
+  });
+}
+
+function cmEl(avatar, nick){
+  const s = document.createElement("span");
+  s.className = "cm";
+  s.innerHTML = avatar && avatar.startsWith("data:")
+    ? '<span class="cav"><img src="'+avatar+'"></span>'
+    : '<span class="cav">'+(avatar||"🙂")+'</span>';
+  const t = document.createElement("span");
+  t.textContent = nick;
+  s.appendChild(t);
+  return s;
+}
+
+/* ================= 语音房间 ================= */
+function joinVoice(name){
+  const roomId = "v" + domainKey + hash36(name);
+  voiceRoom = joinRoom(domainConfig, roomId);
+  window._voiceRoom = voiceRoom;
+
+  const [sendScreenOn, getScreenOn] = voiceRoom.makeAction("scr");
+  window._sendScreenOn = sendScreenOn;
+
+  getScreenOn((d, pid) => {
+    const rec = conns.get(pid);
+    if (rec){ rec.sharing = !!d.on; renderTiles(); }
+  });
+
+  voiceRoom.onPeerJoin(pid => {
+    if (!conns.has(pid)){
+      conns.set(pid, { inGain:null, volPref:1, sharing:false, screenEl:null });
+    }
+    try { voiceRoom.addStream(outStream, pid); } catch(e){}
+    if (sharing && screenStream){ try { voiceRoom.addStream(screenStream, pid, { screen:true }); } catch(e){} }
+    sendScreenOn({ on:sharing }, pid);
+    renderTiles(); renderMembers(); setState("频道内 · " + (1 + conns.size) + " 人", "ok");
+  });
+  voiceRoom.onPeerLeave(pid => dropPeer(pid));
+  voiceRoom.onPeerStream((stream, pid, meta) => {
+    if (meta && meta.screen) attachScreenStream(pid, stream);
+    else attachVoiceStream(pid, stream);
+  });
+}
+
+function leaveVoice(){
+  if (sharing) stopShare();
+  conns.forEach(rec => {
+    if (rec.inGain){ try{ rec.inGain.disconnect(); }catch(e){} }
+    if (rec.screenEl){ rec.screenEl.remove(); }
+  });
+  conns.clear();
+  if (voiceRoom){ try{ voiceRoom.leave(); }catch(e){} voiceRoom = null; }
+  renderTiles(); updateScreensEmpty();
+}
+
+function dropPeer(pid){
+  const rec = conns.get(pid);
+  if (!rec) return;
+  if (rec.inGain){ try{ rec.inGain.disconnect(); }catch(e){} }
+  if (rec.screenEl){ rec.screenEl.remove(); }
+  conns.delete(pid);
+  renderTiles(); renderMembers(); updateScreensEmpty();
+  setState("频道内 · " + (1 + conns.size) + " 人", "ok");
+}
+
+function attachVoiceStream(pid, stream){
+  let rec = conns.get(pid);
+  if (!rec){ rec = { inGain:null, volPref:1, sharing:false, screenEl:null }; conns.set(pid, rec); }
+  if (rec.inGain) return;
+  const src = audioCtx.createMediaStreamSource(stream);
+  const g = audioCtx.createGain();
+  g.gain.value = rec.volPref || 1;
+  src.connect(g); g.connect(audioCtx.destination);
+  rec.inGain = g;
+  renderTiles(); renderMembers();
+}
+
+function attachScreenStream(pid, stream){
+  let rec = conns.get(pid);
+  if (!rec){ rec = { inGain:null, volPref:1, sharing:false, screenEl:null }; conns.set(pid, rec); }
+  if (rec.screenEl){ rec.screenEl.querySelector("video").srcObject = stream; return; }
+  const info = peers.get(pid);
+  const el = buildScreenBox(info ? info.nick : "对方", rec, false);
+  el.querySelector("video").srcObject = stream;
+  $("screens").appendChild(el);
+  rec.screenEl = el;
+  rec.sharing = true;
+  updateScreensEmpty(); renderTiles();
+  const vt = stream.getVideoTracks()[0];
+  if (vt) vt.onended = () => {
+    if (rec.screenEl){ rec.screenEl.remove(); rec.screenEl = null; }
+    rec.sharing = false;
+    renderTiles(); updateScreensEmpty();
+  };
+}
+
+function buildScreenBox(title, rec, isLocal){
+  const el = document.createElement("div");
+  el.className = "screen-box";
+  const head = document.createElement("div");
+  head.className = "s-head";
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = title;
+  head.appendChild(tag);
+  if (!isLocal && rec){
+    const vol = document.createElement("span");
+    vol.className = "vol";
+    vol.innerHTML = '🔊<input type="range" min="0" max="200" value="' + Math.round((rec.volPref || 1) * 100) + '">';
+    vol.querySelector("input").oninput = e => {
+      const v = e.target.value / 100;
+      rec.volPref = v;
+      if (rec.inGain) rec.inGain.gain.value = v;
+    };
+    head.appendChild(vol);
+  }
+  const fsb = document.createElement("button");
+  fsb.textContent = "⛶"; fsb.title = "全屏";
+  fsb.onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else el.requestFullscreen().catch(() => {});
+  };
+  head.appendChild(fsb);
+  const minb = document.createElement("button");
+  minb.textContent = "—"; minb.title = "收起隐藏";
+  minb.onclick = () => minimizeScreen(el, tag.textContent);
+  head.appendChild(minb);
+  el.appendChild(head);
+  const vw = document.createElement("div");
+  vw.className = "vwrap";
+  const v = document.createElement("video");
+  v.autoplay = true; v.playsInline = true; v.muted = true;
+  vw.appendChild(v);
+  el.appendChild(vw);
+  return el;
+}
+
+function minimizeScreen(el, title){
+  el.style.display = "none";
+  const chip = document.createElement("span");
+  chip.className = "s-chip";
+  chip.textContent = "🖥 " + title + "（已隐藏）";
+  chip.onclick = () => {
+    el.style.display = "";
+    chip.remove();
+    if (!$("minBar").children.length) $("minBar").style.display = "none";
+    updateScreensEmpty(); renderTiles();
+  };
+  $("minBar").appendChild(chip);
+  $("minBar").style.display = "flex";
+  updateScreensEmpty(); renderTiles();
+}
+
+function updateScreensEmpty(){
+  const visible = [...$("screens").querySelectorAll(".screen-box")].some(b => b.style.display !== "none");
+  const hidden = $("minBar").children.length > 0;
+  $("noScreen").style.display = (visible || hidden) ? "none" : "";
+}
+
+/* ================= 渲染 ================= */
+function renderMyAvatar(){
+  const el = $("meAvatar");
+  if (my.avatar.startsWith("data:")) el.innerHTML = '<img src="'+my.avatar+'">';
+  else el.textContent = my.avatar;
+}
+
+function setState(text, cls){
+  const el = $("connState");
+  el.textContent = text;
+  el.className = cls || "";
+}
+
+function renderTiles(){
+  const box = $("tiles");
+  box.innerHTML = "";
+  const me = document.createElement("div");
+  me.className = "tile";
+  me.innerHTML = (my.avatar.startsWith("data:")
+    ? '<div class="tava"><img src="'+my.avatar+'"></div>'
+    : '<div class="tava">'+my.avatar+'</div>') +
+    '<span class="nm"></span><span class="mic">' +
+    (sharing ? "🖥 共享中" : (myChannel ? (micOn ? "🎤 开麦" : "🔇 已静音") : "未加入频道")) + '</span>';
+  me.querySelector(".nm").textContent = my.nick + (myChannel ? "（我）" : "");
+  box.appendChild(me);
+
+  conns.forEach((rec, pid) => {
+    const p = peers.get(pid) || { nick:"…", avatar:"🙂", muted:false };
+    const d = document.createElement("div");
+    d.className = "tile";
+    d.innerHTML = (p.avatar && p.avatar.startsWith("data:")
+      ? '<div class="tava"><img src="'+p.avatar+'"></div>'
+      : '<div class="tava">'+(p.avatar||"🙂")+'</div>') +
+      '<span class="nm"></span><span class="mic">' + (p.muted ? "🔇 静音" : "🎤 开麦") + '</span>' +
+      '<button class="see-btn" title="查看他的屏幕共享">🖥</button>';
+    d.querySelector(".nm").textContent = p.nick;
+    const btn = d.querySelector(".see-btn");
+    if (rec.sharing) btn.classList.add("sharing");
+    if (rec.screenEl && rec.screenEl.style.display !== "none") btn.classList.add("open");
+    btn.onclick = () => viewScreen(rec, p.nick);
+    box.appendChild(d);
+  });
+}
+
+function viewScreen(rec, nick){
+  if (!rec.sharing || !rec.screenEl) return alert(nick + " 现在没有共享屏幕");
+  if (rec.screenEl.style.display === "none"){
+    [...$("minBar").children].forEach(chip => { if (chip.textContent.includes(nick)) chip.remove(); });
+    if (!$("minBar").children.length) $("minBar").style.display = "none";
+    rec.screenEl.style.display = "";
+  }
+  rec.screenEl.scrollIntoView({ behavior:"smooth", block:"nearest" });
+  updateScreensEmpty(); renderTiles();
+}
+
+function renderMembers(){
+  const online = $("onlineList");
+  online.innerHTML = "";
+  const onlineNicks = new Set([my.nick]);
+  online.appendChild(memEl(my.avatar, my.nick, myChannel ? "#" + myChannel : "未加入频道", null, false));
+  peers.forEach((p, pid) => {
+    onlineNicks.add(p.nick);
+    online.appendChild(memEl(p.avatar, p.nick, p.channel ? "#" + p.channel : "大厅外", p.channel === myChannel ? conns.get(pid) : null, false));
+  });
+  const offline = $("offlineList");
+  offline.innerHTML = "";
+  const mems = loadMemRegistry();
+  Object.keys(mems).sort().forEach(nick => {
+    if (onlineNicks.has(nick)) return;
+    offline.appendChild(memEl(mems[nick].avatar, nick, "离线", null, true));
+  });
+}
+
+function memEl(avatar, nick, status, rec, off){
+  const d = document.createElement("div");
+  d.className = "mem" + (off ? " off" : "");
+  const dot = '<span class="dot"></span>';
+  if (avatar && avatar.startsWith("data:")) d.innerHTML = '<span class="ava"><img src="'+avatar+'">'+dot+'</span>';
+  else d.innerHTML = '<span class="ava">'+(avatar||"🙂")+dot+'</span>';
+  const mi = document.createElement("span");
+  mi.className = "mi";
+  mi.innerHTML = '<div class="nm"></div><div class="st"></div>';
+  mi.querySelector(".nm").textContent = nick;
+  mi.querySelector(".st").textContent = status || "";
+  d.appendChild(mi);
+  if (rec && rec.inGain && !off){
+    const vol = document.createElement("span");
+    vol.className = "vol";
+    vol.innerHTML = '🔊<input type="range" min="0" max="200" value="' + Math.round((rec.volPref||1) * 100) + '">';
+    vol.querySelector("input").oninput = e => {
+      const v = e.target.value / 100;
+      rec.volPref = v;
+      rec.inGain.gain.value = v;
+    };
+    d.appendChild(vol);
+  }
+  return d;
+}
+
+/* ================= 控制条 ================= */
+$("micBtn").onclick = () => {
+  micOn = !micOn;
+  if (micTrackRef) micTrackRef.enabled = micOn;
+  $("micBtn").textContent = micOn ? "🎤 静音" : "🔇 取消静音";
+  $("micBtn").classList.toggle("mic-off", !micOn);
+  window._sendReg && window._sendReg(myReg());
+  renderTiles();
+};
+
+$("micVol").oninput = e => {
+  const v = e.target.value / 100;
+  if (micGain) micGain.gain.value = v;
+  $("micVolVal").textContent = e.target.value + "%";
+};
+
+/* ---------- 智能降噪 ---------- */
+/* 链路：mic → 高通(80Hz去轰鸣) → 带通强调人声频段 → 噪声门(低于阈值压到-40dB) → 压缩器(人声更稳) → 峰值限幅 → 输出 */
+function buildDenoiseChain(){
+  if (!audioCtx || dnNodes) return;
+
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 85;          // 切掉键盘/风扇/空调低频轰鸣
+  hp.Q.value = 0.71;
+
+  const presence = audioCtx.createBiquadFilter();   // 提亮人声
+  presence.type = "peaking";
+  presence.frequency.value = 2600;  // 人声清晰度频段
+  presence.gain.value = 4;
+  presence.Q.value = 0.9;
+
+  const lowcut2 = audioCtx.createBiquadFilter();    // 进一步压高频嘶声区噪音
+  lowcut2.type = "highshelf";
+  lowcut2.frequency.value = 7500;
+  lowcut2.gain.value = -3;
+
+  const gate = audioCtx.createDynamicsCompressor(); // 噪声门效果：低电平强压
+  gate.threshold.value = -46;
+  gate.knee.value = 12;
+  gate.ratio.value = 8;
+  gate.attack.value = 0.003;
+  gate.release.value = 0.25;
+
+  const comp = audioCtx.createDynamicsCompressor(); // 人声动态压缩：忽大忽小拉平
+  comp.threshold.value = -24;
+  comp.knee.value = 18;
+  comp.ratio.value = 3;
+  comp.attack.value = 0.006;
+  comp.release.value = 0.28;
+
+  const makeup = audioCtx.createGain();            // 压缩后补一点增益，人声更突出
+  makeup.gain.value = 1.35;
+
+  const limiter = audioCtx.createDynamicsCompressor(); // 峰值限幅防爆音
+  limiter.threshold.value = -3;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.001;
+  limiter.release.value = 0.1;
+
+  dnNodes = { hp, presence, lowcut2, gate, comp, makeup, limiter };
+}
+
+function setDenoise(on){
+  if (!audioCtx || !micSourceNode || !micGain) return;
+  buildDenoiseChain();
+  if (!dnNodes) return;
+
+  try {
+    // 断开当前所有连到 micGain 的上游
+    try { micSourceNode.disconnect(); } catch(e){}
+    try { dnNodes.limiter.disconnect(); } catch(e){}
+
+    if (on){
+      // 降噪链：source → hp → presence → lowcut2 → gate → comp → makeup → limiter → micGain → (dst)
+      micSourceNode.connect(dnNodes.hp);
+      dnNodes.hp.connect(dnNodes.presence);
+      dnNodes.presence.connect(dnNodes.lowcut2);
+      dnNodes.lowcut2.connect(dnNodes.gate);
+      dnNodes.gate.connect(dnNodes.comp);
+      dnNodes.comp.connect(dnNodes.makeup);
+      dnNodes.makeup.connect(dnNodes.limiter);
+      dnNodes.limiter.connect(micGain);
+    } else {
+      // 直通：source → micGain → (dst)
+      micSourceNode.connect(micGain);
+    }
+    denoiseOn = on;
+    $("denoiseChk").checked = on;
+  } catch(e){
+    console.warn("denoise switch error", e);
+  }
+}
+
+$("denoiseChk").onchange = e => setDenoise(e.target.checked);
+
+$("shareBtn").onclick = async () => {
+  if (!myChannel) return alert("请先双击加入一个频道，再共享屏幕");
+  if (sharing){ stopShare(); return; }
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:60, width:{ ideal:1920 }, height:{ ideal:1080 } }, audio:false });
+  } catch(e){ return; }
+  sharing = true;
+  $("shareBtn").textContent = "⏹ 停止共享";
+  $("shareBtn").classList.add("share-on");
+  screenStream.getVideoTracks()[0].onended = stopShare;
+
+  localScreenEl = buildScreenBox("我的屏幕（本地预览）", null, true);
+  localScreenEl.querySelector("video").srcObject = screenStream;
+  $("screens").appendChild(localScreenEl);
+  updateScreensEmpty(); renderTiles();
+
+  if (voiceRoom){
+    try { voiceRoom.addStream(screenStream, null, { screen:true }); } catch(e){}
+    window._sendScreenOn && window._sendScreenOn({ on:true });
+  }
+};
+
+function stopShare(){
+  sharing = false;
+  $("shareBtn").textContent = "🖥 共享屏幕";
+  $("shareBtn").classList.remove("share-on");
+  if (screenStream){ screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+  if (localScreenEl){ localScreenEl.remove(); localScreenEl = null; }
+  conns.forEach(rec => {
+    if (rec.screenEl){ rec.screenEl.remove(); rec.screenEl = null; }
+    rec.sharing = false;
+  });
+  if (voiceRoom && window._sendScreenOn) window._sendScreenOn({ on:false });
+  updateScreensEmpty(); renderTiles();
+}
+
+/* ================= 换头像 ================= */
+$("meAvatar").onclick = () => {
+  const row = $("avatarRow2");
+  row.innerHTML = "";
+  EMOJI_AVATARS.forEach(e => {
+    const d = document.createElement("div");
+    d.className = "avatar-opt" + (my.avatar === e ? " sel" : "");
+    d.textContent = e;
+    d.onclick = () => applyAvatar(e);
+    row.appendChild(d);
+  });
+  $("avModal").classList.add("open");
+};
+$("cancelAvBtn").onclick = () => $("avModal").classList.remove("open");
+$("upAvatarBtn2").onclick = () => $("upAvatar2").click();
+$("upAvatar2").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => compressImg(r.result, d => applyAvatar(d));
+  r.readAsDataURL(f);
+};
+
+function applyAvatar(a){
+  my.avatar = a;
+  localStorage.setItem(LS.avatar, a);
+  renderMyAvatar();
+  window._sendReg && window._sendReg(myReg());
+  renderTiles(); renderMembers();
+  $("avModal").classList.remove("open");
+}
+
+/* ================= 离开 ================= */
+$("leaveBtn").onclick = () => {
+  if (!confirm("离开后将断开连接（域、频道和邀请码都保留在本机），确定吗？")) return;
+  leaveDomain();
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (audioCtx) { try{ audioCtx.close(); }catch(e){} audioCtx = null; }
+  micTrackRef = null; micGain = null; outStream = null;
+  $("app").style.display = "none";
+  $("login").style.display = "flex";
+  $("step1").style.display = "none";
+  $("step2").style.display = ""; // 直接回选域页面
+  setState("", "");
+};
+
+window.addEventListener("beforeunload", () => { try{ leaveDomain(); }catch(e){} });
+</script>
+</body>
+</html>
