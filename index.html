@@ -105,6 +105,11 @@
   .tile .see-btn:hover { color:#fff; background:#4a4e58; }
   .tile .see-btn.sharing { background:var(--green); color:#fff; animation:pulse 1.6s infinite; }
   .tile .see-btn.open { background:var(--brand); color:#fff; }
+  .tile .tava { transition:box-shadow .12s; }
+  .tile.speaking .tava { box-shadow:0 0 0 4px var(--green), 0 0 22px rgba(59,165,93,.6); }
+  .mem .ava { transition:box-shadow .12s; }
+  .mem.speaking .ava { box-shadow:0 0 0 3px var(--green); }
+  .chan .cm.speaking .cav { box-shadow:0 0 0 2px var(--green); }
   @keyframes pulse { 0%,100%{ box-shadow:0 0 0 0 rgba(59,165,93,.5);} 50%{ box-shadow:0 0 0 7px rgba(59,165,93,0);} }
 
   #screens { flex:1; display:flex; flex-wrap:wrap; gap:12px; padding:14px 22px; overflow:auto; background:var(--screenbg); align-content:flex-start; min-height:180px; }
@@ -212,6 +217,7 @@
   <div id="topbar">
     <span class="logo-sm">CNNC</span>
     <span id="domainTag"></span>
+    <span id="fpTag" title="房间指纹：和朋友的指纹一致才说明你们在同一域；不一致 = 域名或邀请码输入有差别" style="font-size:11px;color:var(--sub);background:var(--panel2);padding:4px 10px;border-radius:8px;cursor:help"></span>
     <button id="inviteBtn" title="查看本域邀请码">邀请码</button>
     <span id="connState"></span>
     <button id="leaveBtn">离开</button>
@@ -312,8 +318,9 @@
 <div class="modal-mask" id="showInvModal">
   <div class="modal">
     <h3>本域邀请码</h3>
-    <div class="code-tip">朋友输入「域名 + 这个邀请码」即可进入本域</div>
+    <div class="code-tip">朋友输入「域名 + 这个邀请码」即可进入本域<br>进入后请核对双方顶栏的「指纹」是否一致（不一致 = 输入有差别）</div>
     <div class="code-big" id="showInvCode"></div>
+    <div class="code-tip" id="showInvFp" style="margin-bottom:6px"></div>
     <div class="row">
       <button class="big-btn" id="copyCodeBtn2">📋 复制邀请码</button>
       <button class="ghost-btn" id="closeShowInv">关闭</button>
@@ -345,6 +352,7 @@ let my = { nick:"", avatar:EMOJI_AVATARS[0], domain:"", domainKey:"", domCode:""
 let audioCtx = null, micGain = null, micStream = null, outStream = null, micTrackRef = null;
 let micOn = true, sharing = false, screenStream = null, localScreenEl = null;
 let denoiseOn = false, dnNodes = null, micSourceNode = null;   // 智能降噪：链路节点
+let micAnalyser = null, speakTimer = null;                     // 说话检测
 
 let dirRoom = null;          // 域感知房间：全域在线名单 + 频道登记
 let voiceRoom = null;        // 当前频道的语音房间
@@ -370,6 +378,9 @@ function hash36(str){
   return (h1.toString(36) + h2.toString(36));
 }
 
+/* 域名规范化：忽略大小写和首尾空格，防止 "Home" 和 "home" 变成两个域 */
+function normDomain(name){ return (name || "").trim().toLowerCase(); }
+
 function genInviteCode(){
   const L = "ABCDEFGHJKLMNPQRSTUVWXYZ";
   let s = "";
@@ -388,7 +399,7 @@ function loadDomains(){
   return [];
 }
 function saveDomains(list){ localStorage.setItem(LS.domains, JSON.stringify(list)); }
-function findDomain(name){ return loadDomains().find(d => d.name === name) || null; }
+function findDomain(name){ return loadDomains().find(d => normDomain(d.name) === normDomain(name)) || null; }
 function loadJSON(key, fallback){
   try { const v = JSON.parse(localStorage.getItem(key) || "null"); if (v != null) return v; } catch(e){}
   return fallback;
@@ -562,9 +573,11 @@ async function enterApp(name, code){
   }
   localStorage.setItem(LS.domain, name);
 
-  my.domain = name;
+  my.domain = normDomain(name);   // 统一小写存取，保证所有人算出同一个域地址
   my.domCode = code;
-  my.domainKey = "d" + hash36(name + "||" + code);
+  my.domainKey = "d" + hash36(my.domain + "||" + code);
+  // 房间指纹：域内所有人应一致，可当场核对是否在同一域
+  my.domainFingerprint = hash36(my.domainKey).slice(0, 6).toUpperCase();
   myChannel = null;
   domainConfig = { appId: "cnnc-v1", password: "cnnc-" + code };
 
@@ -586,6 +599,8 @@ async function enterApp(name, code){
   renderTiles();
   renderMembers();
   setState("在线（未加入频道）", "ok");
+  $("fpTag").textContent = "指纹 " + my.domainFingerprint;
+  startSpeakLoop();
 
   joinDomainRoom(firstTime);
 }
@@ -649,6 +664,7 @@ function myReg(){ return { nick:my.nick, avatar:my.avatar, channel:myChannel, mu
 
 function leaveDomain(){
   clearTimeout(emptyCheckTimer);
+  stopSpeakLoop();
   if (sharing) stopShare();
   leaveVoice();
   if (dirRoom){ try{ dirRoom.leave(); }catch(e){} dirRoom = null; }
@@ -693,6 +709,7 @@ $("mCreateBtn").onclick = () => {
 
 $("inviteBtn").onclick = () => {
   $("showInvCode").textContent = my.domCode || "—";
+  $("showInvFp").textContent = "房间指纹：" + (my.domainFingerprint || "—");
   $("showInvModal").classList.add("open");
 };
 $("closeShowInv").onclick = () => $("showInvModal").classList.remove("open");
@@ -813,10 +830,10 @@ function renderChannels(){
     d.querySelector(".cn").textContent = name;
     const mems = d.querySelector(".mems");
     if (myChannel === name){
-      mems.appendChild(cmEl(my.avatar, my.nick + "（我）"));
+      mems.appendChild(cmEl(my.avatar, my.nick + "（我）", "me"));
     }
     peers.forEach((p, pid) => {
-      if (p.channel === name) mems.appendChild(cmEl(p.avatar, p.nick));
+      if (p.channel === name) mems.appendChild(cmEl(p.avatar, p.nick, pid));
     });
     d.querySelector(".e").onclick = e => { e.stopPropagation(); switchChannel(name); };
     d.querySelector(".r").onclick = e => { e.stopPropagation(); renameChannel(name); };
@@ -827,9 +844,10 @@ function renderChannels(){
   });
 }
 
-function cmEl(avatar, nick){
+function cmEl(avatar, nick, pid){
   const s = document.createElement("span");
-  s.className = "cm";
+  s.className = "cm" + (speakingSet.has(pid) ? " speaking" : "");
+  if (pid) s.dataset.pid = pid;
   s.innerHTML = avatar && avatar.startsWith("data:")
     ? '<span class="cav"><img src="'+avatar+'"></span>'
     : '<span class="cav">'+(avatar||"🙂")+'</span>';
@@ -877,6 +895,7 @@ function leaveVoice(){
   });
   conns.clear();
   if (voiceRoom){ try{ voiceRoom.leave(); }catch(e){} voiceRoom = null; }
+  lastSpeakTs.clear();
   renderTiles(); updateScreensEmpty();
 }
 
@@ -899,6 +918,9 @@ function attachVoiceStream(pid, stream){
   g.gain.value = rec.volPref || 1;
   src.connect(g); g.connect(audioCtx.destination);
   rec.inGain = g;
+  // 挂电平分析器（音量调 0 时不出声也不亮灯，符合直觉）
+  rec.analyser = makeAnalyser();
+  try { g.connect(rec.analyser); } catch(e){}
   renderTiles(); renderMembers();
 }
 
@@ -997,11 +1019,83 @@ function setState(text, cls){
   el.className = cls || "";
 }
 
+/* ================= 说话高亮 ================= */
+/* 电平分析：自己挂麦克风链末端；远端挂在各自的音量增益节点上。说话时给对应头像加绿色光环 */
+const speakingSet = new Set();          // "me" 或远端 pid
+const lastSpeakTs = new Map();          // pid -> 最后一次超过阈值的时间（拖尾 300ms）
+let selfAnalyser = null;
+const SPEAK_RMS = 0.045;                // 说话阈值（0~1）
+const SPEAK_HANGOVER = 320;             // ms 拖尾，防止光环闪烁
+
+function makeAnalyser(){
+  const a = audioCtx.createAnalyser();
+  a.fftSize = 512;
+  a.smoothingTimeConstant = 0.5;
+  return a;
+}
+
+function rmsOf(analyser){
+  const buf = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++){
+    const v = (buf[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / buf.length);
+}
+
+function startSpeakLoop(){
+  // 自己的检测点：挂在麦克风链末端（micGain），反映真正发出去的声音
+  if (audioCtx && micGain && !selfAnalyser){
+    selfAnalyser = makeAnalyser();
+    try { micGain.connect(selfAnalyser); } catch(e){}
+  }
+  if (speakTimer) return;
+  speakTimer = setInterval(() => {
+    if (!audioCtx) return;
+    const now = Date.now();
+
+    // 自己
+    if (selfAnalyser){
+      if (micOn && rmsOf(selfAnalyser) > SPEAK_RMS) lastSpeakTs.set("me", now);
+    }
+    // 远端
+    conns.forEach((rec, pid) => {
+      if (rec.analyser && rmsOf(rec.analyser) > SPEAK_RMS) lastSpeakTs.set(pid, now);
+    });
+
+    const isSpeaking = key => now - (lastSpeakTs.get(key) || 0) < SPEAK_HANGOVER;
+
+    // 自己
+    setSpeakClass("me", isSpeaking("me"));
+    // 远端
+    conns.forEach((rec, pid) => setSpeakClass(pid, isSpeaking(pid)));
+  }, 130);
+}
+
+function setSpeakClass(key, on){
+  const was = speakingSet.has(key);
+  if (on === was) return;
+  if (on) speakingSet.add(key); else speakingSet.delete(key);
+  document.querySelectorAll('[data-pid="' + key + '"]').forEach(el => {
+    el.classList.toggle("speaking", on);
+  });
+}
+
+function stopSpeakLoop(){
+  if (speakTimer){ clearInterval(speakTimer); speakTimer = null; }
+  speakingSet.clear(); lastSpeakTs.clear();
+  document.querySelectorAll(".speaking").forEach(el => el.classList.remove("speaking"));
+  selfAnalyser = null;
+}
+
 function renderTiles(){
   const box = $("tiles");
   box.innerHTML = "";
   const me = document.createElement("div");
-  me.className = "tile";
+  me.className = "tile" + (speakingSet.has("me") ? " speaking" : "");
+  me.dataset.pid = "me";
   me.innerHTML = (my.avatar.startsWith("data:")
     ? '<div class="tava"><img src="'+my.avatar+'"></div>'
     : '<div class="tava">'+my.avatar+'</div>') +
@@ -1013,7 +1107,8 @@ function renderTiles(){
   conns.forEach((rec, pid) => {
     const p = peers.get(pid) || { nick:"…", avatar:"🙂", muted:false };
     const d = document.createElement("div");
-    d.className = "tile";
+    d.className = "tile" + (speakingSet.has(pid) ? " speaking" : "");
+    d.dataset.pid = pid;
     d.innerHTML = (p.avatar && p.avatar.startsWith("data:")
       ? '<div class="tava"><img src="'+p.avatar+'"></div>'
       : '<div class="tava">'+(p.avatar||"🙂")+'</div>') +
@@ -1043,23 +1138,24 @@ function renderMembers(){
   const online = $("onlineList");
   online.innerHTML = "";
   const onlineNicks = new Set([my.nick]);
-  online.appendChild(memEl(my.avatar, my.nick, myChannel ? "#" + myChannel : "未加入频道", null, false));
+  online.appendChild(memEl(my.avatar, my.nick, myChannel ? "#" + myChannel : "未加入频道", null, false, "me"));
   peers.forEach((p, pid) => {
     onlineNicks.add(p.nick);
-    online.appendChild(memEl(p.avatar, p.nick, p.channel ? "#" + p.channel : "大厅外", p.channel === myChannel ? conns.get(pid) : null, false));
+    online.appendChild(memEl(p.avatar, p.nick, p.channel ? "#" + p.channel : "大厅外", p.channel === myChannel ? conns.get(pid) : null, false, pid));
   });
   const offline = $("offlineList");
   offline.innerHTML = "";
   const mems = loadMemRegistry();
   Object.keys(mems).sort().forEach(nick => {
     if (onlineNicks.has(nick)) return;
-    offline.appendChild(memEl(mems[nick].avatar, nick, "离线", null, true));
+    offline.appendChild(memEl(mems[nick].avatar, nick, "离线", null, true, null));
   });
 }
 
-function memEl(avatar, nick, status, rec, off){
+function memEl(avatar, nick, status, rec, off, pid){
   const d = document.createElement("div");
-  d.className = "mem" + (off ? " off" : "");
+  d.className = "mem" + (off ? " off" : "") + (pid && speakingSet.has(pid) ? " speaking" : "");
+  if (pid) d.dataset.pid = pid;
   const dot = '<span class="dot"></span>';
   if (avatar && avatar.startsWith("data:")) d.innerHTML = '<span class="ava"><img src="'+avatar+'">'+dot+'</span>';
   else d.innerHTML = '<span class="ava">'+(avatar||"🙂")+dot+'</span>';
