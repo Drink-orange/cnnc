@@ -795,6 +795,7 @@ function switchChannel(name){
   window._sendReg && window._sendReg(myReg());
   renderChannels();
   renderTiles();
+  renderMembers();
   joinVoice(name);
 }
 
@@ -811,6 +812,7 @@ function exitChannel(){
   window._sendReg && window._sendReg(myReg());
   renderChannels();
   renderTiles();
+  renderMembers();
 }
 $("exitChBtn").onclick = exitChannel;
 
