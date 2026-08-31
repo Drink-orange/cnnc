@@ -430,6 +430,9 @@ function buildAvatarRow(container, onPick){
     d.onclick = () => onPick(e);
     container.appendChild(d);
   });
+  // 「＋上传」按钮永远保持在最后
+  const up = container.querySelector(".avatar-up");
+  if (up) container.appendChild(up);
 }
 
 $("nickInput").value = localStorage.getItem(LS.nick) || "";
