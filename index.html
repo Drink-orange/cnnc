@@ -342,7 +342,27 @@
 </div>
 
 <script type="module">
-import { joinRoom, selfId } from "https://cdn.jsdelivr.net/npm/trystero@0.21.4/mqtt/+esm";
+/* 通信库加载：优先同域自带文件（跟网站同源，最稳定），失败依次回退 CDN 镜像 */
+let joinRoom, selfId;
+{
+  const SOURCES = [
+    "./trystero-mqtt.mjs",
+    "https://cdn.jsdelivr.net/npm/trystero@0.21.4/mqtt/+esm",
+    "https://fastly.jsdelivr.net/npm/trystero@0.21.4/mqtt/+esm",
+    "https://gcore.jsdelivr.net/npm/trystero@0.21.4/mqtt/+esm"
+  ];
+  let lib = null;
+  for (const u of SOURCES){
+    try { lib = await import(u); console.log("通信库已加载:", u); break; }
+    catch(e){ console.warn("通信库加载失败，换下一个源:", u); }
+  }
+  if (!lib){
+    alert("通信库加载失败：请检查网络后刷新页面重试");
+    throw new Error("trystero load failed");
+  }
+  joinRoom = lib.joinRoom;
+  selfId = lib.selfId;
+}
 
 /* ================= 常量与状态 ================= */
 const EMOJI_AVATARS = ["🙂","😎","🐱","🐶","🦊","🐼","🤖","👾","👻","🦁","🐧","🐷"];
